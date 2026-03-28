@@ -270,7 +270,6 @@ export function ReimbursementForm(props: {
           }
           await submitReimbursement(rid);
           router.push(`/reimbursements/${rid}`);
-          router.refresh();
           return;
         }
 
@@ -285,7 +284,6 @@ export function ReimbursementForm(props: {
           purposeInput.value = "";
         }
         router.replace(`/reimbursements/new?id=${newId}`);
-        router.refresh();
         const supabase = createClient();
         const { data } = await supabase
           .from("reimbursement_attachments")

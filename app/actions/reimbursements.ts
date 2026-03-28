@@ -149,6 +149,7 @@ export async function createReimbursementDraft(input: ReimbursementDraftInput) {
   await logAction(supabase, data.id, "创建草稿", { title: input.title });
   revalidatePath("/dashboard");
   revalidatePath("/reimbursements/mine");
+  revalidatePath("/reimbursements/new");
   return data.id as string;
 }
 
@@ -176,6 +177,7 @@ export async function updateReimbursementDraft(
   revalidatePath("/dashboard");
   revalidatePath(`/reimbursements/${id}`);
   revalidatePath("/reimbursements/mine");
+  revalidatePath("/reimbursements/new");
 }
 
 export async function submitReimbursement(id: string) {

@@ -8,7 +8,34 @@ import type {
   ReimbursementType,
   UserRole,
 } from "@/types/database";
-import type { ReimbursementAttachment } from "@/types/database";
+import {
+  REIMBURSEMENT_TYPE_OPTIONS,
+  type ReimbursementAttachment,
+} from "@/types/database";
+
+function normalizeType(raw: string): ReimbursementType {
+  return REIMBURSEMENT_TYPE_OPTIONS.includes(raw as ReimbursementType)
+    ? (raw as ReimbursementType)
+    : "其他";
+}
+
+/** RSC → Client 禁止出现 undefined，否则会触发生产环境 Server Components 报错 */
+function toClientAttachments(rows: unknown[] | null | undefined): ReimbursementAttachment[] {
+  if (!rows?.length) return [];
+  return rows.map((r) => {
+    const a = r as Record<string, unknown>;
+    const kind = a.attachment_type === "purpose" ? "purpose" : "invoice";
+    return {
+      id: String(a.id),
+      reimbursement_id: String(a.reimbursement_id),
+      storage_path: String(a.storage_path),
+      file_name: a.file_name != null ? String(a.file_name) : null,
+      content_type: a.content_type != null ? String(a.content_type) : null,
+      attachment_type: kind,
+      created_at: String(a.created_at),
+    };
+  });
+}
 
 function rowToInitial(row: {
   id: string;
@@ -22,7 +49,7 @@ function rowToInitial(row: {
   amount?: string | number | null;
   exchange_rate_date?: string | null;
   exchange_rate_source?: string | null;
-  description: string | null;
+  description?: string | null;
 }) {
   const cnyVal = Number(row.amount_cny ?? row.amount ?? 0);
   const origVal = Number(row.original_amount ?? row.amount ?? cnyVal);
@@ -30,8 +57,8 @@ function rowToInitial(row: {
     id: row.id,
     title: row.title,
     expense_date: row.expense_date,
-    type: row.type as ReimbursementType,
-    description: row.description,
+    type: normalizeType(String(row.type ?? "其他")),
+    description: row.description ?? null,
     currency: (row.currency === "USD" ? "USD" : "CNY") as CurrencyCode,
     original_amount: origVal,
     exchange_rate: Number(row.exchange_rate ?? 1),
@@ -44,7 +71,7 @@ function rowToInitial(row: {
 export default async function NewReimbursementPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string }>;
+  searchParams: Promise<{ id?: string | string[] }>;
 }) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
@@ -54,7 +81,10 @@ export default async function NewReimbursementPage({
     redirect("/dashboard?denied=1");
   }
 
-  const { id: editId } = await searchParams;
+  const sp = await searchParams;
+  const rawId = sp?.id;
+  const editId =
+    typeof rawId === "string" ? rawId : Array.isArray(rawId) ? rawId[0] : undefined;
   const supabase = await createClient();
 
   if (!editId) {
@@ -129,9 +159,7 @@ export default async function NewReimbursementPage({
           userId={user.id}
           initialId={editId}
           initial={initial}
-          initialAttachments={
-            (attRows as ReimbursementAttachment[]) ?? []
-          }
+          initialAttachments={toClientAttachments(attRows ?? [])}
         />
       </div>
     </div>
