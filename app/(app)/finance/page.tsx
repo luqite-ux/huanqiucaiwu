@@ -76,6 +76,14 @@ export default async function FinancePage({
       | Array<{ full_name: string | null; email: string | null }>;
   };
 
+  const list = (rows as Row[] | null) ?? [];
+  const totalCny = list.reduce((sum, r) => {
+    const v = Number(r.amount_cny ?? r.amount ?? 0);
+    return sum + (Number.isFinite(v) ? v : 0);
+  }, 0);
+  const filterLabel =
+    FILTERS.find((f) => f.key === status)?.label ?? "全部";
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -134,7 +142,7 @@ export default async function FinancePage({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {(rows as Row[] | null)?.map((r) => {
+              {list.map((r) => {
                 const p = Array.isArray(r.profiles)
                   ? r.profiles[0]
                   : r.profiles;
@@ -170,7 +178,7 @@ export default async function FinancePage({
                   </tr>
                 );
               })}
-              {!rows?.length ? (
+              {!list.length ? (
                 <tr>
                   <td
                     colSpan={6}
@@ -181,6 +189,29 @@ export default async function FinancePage({
                 </tr>
               ) : null}
             </tbody>
+            {list.length > 0 ? (
+              <tfoot>
+                <tr className="border-t-2 border-slate-200 bg-slate-50/90">
+                  <td
+                    colSpan={3}
+                    className="px-4 py-3 text-sm font-semibold text-slate-800"
+                  >
+                    合计（{filterLabel} · {list.length} 条）
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="text-base font-bold tabular-nums text-slate-900">
+                      ¥{totalCny.toFixed(2)}
+                    </span>
+                    <span className="ml-1 text-xs font-normal text-slate-500">
+                      CNY
+                    </span>
+                  </td>
+                  <td colSpan={2} className="px-4 py-3 text-xs text-slate-500">
+                    财务打款请以折合人民币汇总为准
+                  </td>
+                </tr>
+              </tfoot>
+            ) : null}
           </table>
         </div>
       </div>
