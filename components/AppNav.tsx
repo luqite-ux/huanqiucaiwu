@@ -57,13 +57,19 @@ export function AppNav(props: {
             ))}
           </nav>
         </div>
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <div className="hidden text-right text-xs text-slate-500 sm:block">
             <div className="font-medium text-slate-800">
               {fullName || email || "用户"}
             </div>
             <div className="capitalize">{role.replaceAll("_", " ")}</div>
           </div>
+          <Link
+            href="/account/security"
+            className="whitespace-nowrap rounded-lg px-3 py-1.5 text-sm text-brand-accent transition hover:bg-slate-100 hover:text-slate-900"
+          >
+            修改密码
+          </Link>
           <form action={signOut}>
             <button
               type="submit"
