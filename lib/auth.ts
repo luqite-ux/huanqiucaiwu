@@ -38,6 +38,11 @@ export function canAccessFinanceReview(role: UserRole): boolean {
   return role === "finance_admin";
 }
 
+/** 可打开 /finance 列表页（财务审核 + 超级管理员总览与改类型） */
+export function canAccessFinancePage(role: UserRole): boolean {
+  return role === "finance_admin" || role === "super_admin";
+}
+
 /** 财务或超管可打开他人报销详情（列表见 /finance；超管仅调整类型等，不参与审核按钮） */
 export function canViewOthersReimbursementDetail(role: UserRole): boolean {
   return role === "finance_admin" || role === "super_admin";
