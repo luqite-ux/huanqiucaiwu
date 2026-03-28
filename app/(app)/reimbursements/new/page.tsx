@@ -13,6 +13,8 @@ import {
   type ReimbursementAttachment,
 } from "@/types/database";
 
+export const dynamic = "force-dynamic";
+
 function normalizeType(raw: string): ReimbursementType {
   return REIMBURSEMENT_TYPE_OPTIONS.includes(raw as ReimbursementType)
     ? (raw as ReimbursementType)
@@ -51,9 +53,13 @@ function rowToInitial(row: {
   exchange_rate_source?: string | null;
   description?: string | null;
 }) {
-  const cnyVal = Number(row.amount_cny ?? row.amount ?? 0);
-  const origVal = Number(row.original_amount ?? row.amount ?? cnyVal);
-  return {
+  const cnyRaw = Number(row.amount_cny ?? row.amount ?? 0);
+  const cnyVal = Number.isFinite(cnyRaw) ? cnyRaw : 0;
+  const origRaw = Number(row.original_amount ?? row.amount ?? cnyVal);
+  const origVal = Number.isFinite(origRaw) ? origRaw : cnyVal;
+  const rateRaw = Number(row.exchange_rate ?? 1);
+  const rateVal = Number.isFinite(rateRaw) && rateRaw > 0 ? rateRaw : 1;
+  const initial = {
     id: row.id,
     title: row.title,
     expense_date: row.expense_date,
@@ -61,11 +67,12 @@ function rowToInitial(row: {
     description: row.description ?? null,
     currency: (row.currency === "USD" ? "USD" : "CNY") as CurrencyCode,
     original_amount: origVal,
-    exchange_rate: Number(row.exchange_rate ?? 1),
+    exchange_rate: rateVal,
     amount_cny: cnyVal,
     exchange_rate_date: row.exchange_rate_date ?? null,
     exchange_rate_source: row.exchange_rate_source ?? null,
   };
+  return JSON.parse(JSON.stringify(initial)) as typeof initial;
 }
 
 export default async function NewReimbursementPage({

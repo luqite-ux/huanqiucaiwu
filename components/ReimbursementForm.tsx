@@ -269,10 +269,11 @@ export function ReimbursementForm(props: {
             purposeInput.value = "";
           }
           await submitReimbursement(rid);
-          router.push(`/reimbursements/${rid}`);
+          window.location.assign(`/reimbursements/${rid}`);
           return;
         }
 
+        const hadNoReimbursementId = id == null;
         const newId = await saveDraftOrSubmit(id, payload, "draft");
         setId(newId);
         if (invoiceInput?.files?.length) {
@@ -283,14 +284,12 @@ export function ReimbursementForm(props: {
           await uploadFiles(purposeInput.files, newId, "purpose");
           purposeInput.value = "";
         }
-        router.replace(`/reimbursements/new?id=${newId}`);
-        const supabase = createClient();
-        const { data } = await supabase
-          .from("reimbursement_attachments")
-          .select("*")
-          .eq("reimbursement_id", newId)
-          .order("created_at", { ascending: false });
-        setAttachments((data as ReimbursementAttachment[]) ?? []);
+        /* 硬刷新避免 Server Action 后软导航触发的 RSC/Flight 在生产环境报 generic digest */
+        if (hadNoReimbursementId) {
+          window.location.assign(`/reimbursements/new?id=${newId}`);
+        } else {
+          window.location.reload();
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : "保存失败");
       }

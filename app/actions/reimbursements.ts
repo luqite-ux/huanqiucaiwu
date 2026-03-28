@@ -28,6 +28,17 @@ function round6(n: number): number {
   return Math.round(n * 1e6) / 1e6;
 }
 
+function humanizeReimbursementDbError(raw: string): string {
+  const m = raw.toLowerCase();
+  if (m.includes("violates check constraint") && m.includes("type")) {
+    return "报销类型与数据库配置不一致。请在 Supabase 执行迁移 supabase/migrations/004_reimbursement_types_super_admin.sql（含「软件」等新类型），或暂时改选「餐饮」「办公」等旧有类型后保存。";
+  }
+  if (m.includes("violates check constraint")) {
+    return `保存失败（数据校验）：${raw}`;
+  }
+  return raw;
+}
+
 export type ReimbursementMoneyInput = {
   currency: CurrencyCode;
   original_amount: number;
@@ -82,12 +93,15 @@ async function logAction(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  await supabase.from("reimbursement_logs").insert({
+  const { error } = await supabase.from("reimbursement_logs").insert({
     reimbursement_id: reimbursementId,
     actor_id: user?.id ?? null,
     action,
     detail: detail ?? null,
   });
+  if (error) {
+    console.error("[reimbursement_logs]", error.message);
+  }
 }
 
 const ALLOWED_REIMBURSEMENT_TYPES = new Set<string>(REIMBURSEMENT_TYPE_OPTIONS);
@@ -145,11 +159,10 @@ export async function createReimbursementDraft(input: ReimbursementDraftInput) {
     .select("id")
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(humanizeReimbursementDbError(error.message));
   await logAction(supabase, data.id, "创建草稿", { title: input.title });
-  revalidatePath("/dashboard");
+  revalidatePath(`/reimbursements/${data.id}`);
   revalidatePath("/reimbursements/mine");
-  revalidatePath("/reimbursements/new");
   return data.id as string;
 }
 
@@ -172,12 +185,10 @@ export async function updateReimbursementDraft(
     })
     .eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(humanizeReimbursementDbError(error.message));
   await logAction(supabase, id, "更新草稿", { title: input.title });
-  revalidatePath("/dashboard");
   revalidatePath(`/reimbursements/${id}`);
   revalidatePath("/reimbursements/mine");
-  revalidatePath("/reimbursements/new");
 }
 
 export async function submitReimbursement(id: string) {
