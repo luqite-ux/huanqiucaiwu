@@ -244,7 +244,8 @@ export async function GET(request: Request) {
     ];
 
     for (const { att, colIndex } of slots) {
-      if (!att || embeddedCount >= MAX_TOTAL_EMBEDDED_IMAGES) break;
+      if (embeddedCount >= MAX_TOTAL_EMBEDDED_IMAGES) break;
+      if (!att) continue;
       if (isPdf(att.content_type, att.file_name)) continue;
 
       const ext = imageExtensionFromAttachment(
