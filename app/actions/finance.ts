@@ -71,3 +71,87 @@ export async function financeUpdateStatus(
   revalidatePath(`/reimbursements/${reimbursementId}`);
   revalidatePath("/dashboard");
 }
+
+const BATCH_CAP = 200;
+
+export async function financeBatchApprove(ids: string[]) {
+  await assertFinance();
+  const unique = Array.from(
+    new Set(ids.map((id) => id.trim()).filter(Boolean))
+  ).slice(0, BATCH_CAP);
+  if (!unique.length) {
+    return { updated: 0, skipped: 0 };
+  }
+
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+
+  const { data: updatedRows, error } = await supabase
+    .from("reimbursements")
+    .update({
+      status: "approved",
+      rejection_reason: null,
+      approved_at: now,
+    })
+    .in("id", unique)
+    .eq("status", "pending")
+    .select("id");
+
+  if (error) throw new Error(error.message);
+
+  const updated = updatedRows ?? [];
+  for (const row of updated) {
+    await logAction(supabase, row.id, "审核通过（批量）", {
+      status: "approved",
+    });
+  }
+
+  revalidatePath("/finance");
+  revalidatePath("/dashboard");
+  for (const row of updated) {
+    revalidatePath(`/reimbursements/${row.id}`);
+  }
+
+  return { updated: updated.length, skipped: unique.length - updated.length };
+}
+
+export async function financeBatchMarkPaid(ids: string[]) {
+  await assertFinance();
+  const unique = Array.from(
+    new Set(ids.map((id) => id.trim()).filter(Boolean))
+  ).slice(0, BATCH_CAP);
+  if (!unique.length) {
+    return { updated: 0, skipped: 0 };
+  }
+
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+
+  const { data: updatedRows, error } = await supabase
+    .from("reimbursements")
+    .update({
+      status: "paid",
+      paid_at: now,
+      rejection_reason: null,
+    })
+    .in("id", unique)
+    .eq("status", "approved")
+    .select("id");
+
+  if (error) throw new Error(error.message);
+
+  const updated = updatedRows ?? [];
+  for (const row of updated) {
+    await logAction(supabase, row.id, "标记已打款（批量）", {
+      status: "paid",
+    });
+  }
+
+  revalidatePath("/finance");
+  revalidatePath("/dashboard");
+  for (const row of updated) {
+    revalidatePath(`/reimbursements/${row.id}`);
+  }
+
+  return { updated: updated.length, skipped: unique.length - updated.length };
+}
