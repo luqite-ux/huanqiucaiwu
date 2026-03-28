@@ -3,8 +3,43 @@ import { notFound, redirect } from "next/navigation";
 import { ReimbursementForm } from "@/components/ReimbursementForm";
 import { createClient } from "@/lib/supabase/server";
 import { getSessionUser, getProfile, canSubmitReimbursement } from "@/lib/auth";
-import type { ReimbursementType, UserRole } from "@/types/database";
+import type {
+  CurrencyCode,
+  ReimbursementType,
+  UserRole,
+} from "@/types/database";
 import type { ReimbursementAttachment } from "@/types/database";
+
+function rowToInitial(row: {
+  id: string;
+  title: string;
+  expense_date: string;
+  type: string;
+  currency?: string | null;
+  original_amount?: string | number | null;
+  exchange_rate?: string | number | null;
+  amount_cny?: string | number | null;
+  amount?: string | number | null;
+  exchange_rate_date?: string | null;
+  exchange_rate_source?: string | null;
+  description: string | null;
+}) {
+  const cnyVal = Number(row.amount_cny ?? row.amount ?? 0);
+  const origVal = Number(row.original_amount ?? row.amount ?? cnyVal);
+  return {
+    id: row.id,
+    title: row.title,
+    expense_date: row.expense_date,
+    type: row.type as ReimbursementType,
+    description: row.description,
+    currency: (row.currency === "USD" ? "USD" : "CNY") as CurrencyCode,
+    original_amount: origVal,
+    exchange_rate: Number(row.exchange_rate ?? 1),
+    amount_cny: cnyVal,
+    exchange_rate_date: row.exchange_rate_date ?? null,
+    exchange_rate_source: row.exchange_rate_source ?? null,
+  };
+}
 
 export default async function NewReimbursementPage({
   searchParams,
@@ -29,7 +64,7 @@ export default async function NewReimbursementPage({
           <div>
             <h1 className="text-2xl font-semibold text-slate-900">提交报销</h1>
             <p className="mt-1 text-sm text-slate-500">
-              可先保存草稿，稍后在「我的报销」继续编辑。
+              可先保存草稿，稍后在「我的报销」继续编辑。美元金额将按参考汇率折算为人民币（可手动调整汇率）。
             </p>
           </div>
           <Link
@@ -69,14 +104,7 @@ export default async function NewReimbursementPage({
     .eq("reimbursement_id", editId)
     .order("created_at", { ascending: false });
 
-  const initial = {
-    id: row.id,
-    title: row.title,
-    expense_date: row.expense_date,
-    type: row.type as ReimbursementType,
-    amount: Number(row.amount),
-    description: row.description,
-  };
+  const initial = rowToInitial(row);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">

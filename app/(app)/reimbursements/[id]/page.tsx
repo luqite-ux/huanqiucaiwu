@@ -9,8 +9,10 @@ import {
 import { StatusBadge } from "@/components/StatusBadge";
 import { FinanceActions } from "@/components/FinanceActions";
 import { getSignedAttachmentUrl } from "@/app/actions/reimbursements";
+import { AmountDisplayBlock } from "@/components/AmountDisplay";
 import type { ReimbursementStatus, UserRole } from "@/types/database";
 import { isEmployeeRole } from "@/types/database";
+import type { ReimbursementAttachment } from "@/types/database";
 
 export default async function ReimbursementDetailPage({
   params,
@@ -58,16 +60,28 @@ export default async function ReimbursementDetailPage({
     .order("created_at", { ascending: false })
     .limit(50);
 
-  const attUrls = await Promise.all(
-    (attachments ?? []).map(async (a) => {
-      try {
-        const url = await getSignedAttachmentUrl(a.storage_path);
-        return { id: a.id, name: a.file_name, url };
-      } catch {
-        return { id: a.id, name: a.file_name, url: "#" };
-      }
-    })
+  const invoiceAtts = (attachments ?? []).filter(
+    (a) => (a as ReimbursementAttachment).attachment_type !== "purpose"
   );
+  const purposeAtts = (attachments ?? []).filter(
+    (a) => (a as ReimbursementAttachment).attachment_type === "purpose"
+  );
+
+  async function urlsFor(list: typeof attachments) {
+    return Promise.all(
+      (list ?? []).map(async (a) => {
+        try {
+          const url = await getSignedAttachmentUrl(a.storage_path);
+          return { id: a.id, name: a.file_name, url };
+        } catch {
+          return { id: a.id, name: a.file_name, url: "#" };
+        }
+      })
+    );
+  }
+
+  const invoiceUrls = await urlsFor(invoiceAtts);
+  const purposeUrls = await urlsFor(purposeAtts);
 
   const status = row.status as ReimbursementStatus;
   const canEdit =
@@ -120,12 +134,12 @@ export default async function ReimbursementDetailPage({
           </div>
           <div className="mt-1 text-slate-900">{row.type}</div>
         </div>
-        <div>
+        <div className="sm:col-span-2">
           <div className="text-xs font-medium uppercase text-slate-500">
             金额
           </div>
-          <div className="mt-1 text-lg font-semibold tabular-nums text-slate-900">
-            ¥{Number(row.amount).toFixed(2)}
+          <div className="mt-1">
+            <AmountDisplayBlock row={row} />
           </div>
         </div>
         <div>
@@ -136,6 +150,30 @@ export default async function ReimbursementDetailPage({
             {submitter?.full_name || submitter?.email || row.user_id}
           </div>
         </div>
+        {(row.submitted_at ||
+          row.approved_at ||
+          row.paid_at) ? (
+          <div className="text-xs text-slate-500 sm:col-span-2">
+            {row.submitted_at ? (
+              <div>
+                提交时间：{" "}
+                {new Date(row.submitted_at).toLocaleString("zh-CN")}
+              </div>
+            ) : null}
+            {row.approved_at ? (
+              <div>
+                审核通过：{" "}
+                {new Date(row.approved_at).toLocaleString("zh-CN")}
+              </div>
+            ) : null}
+            {row.paid_at ? (
+              <div>
+                打款时间：{" "}
+                {new Date(row.paid_at).toLocaleString("zh-CN")}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         {row.description ? (
           <div className="sm:col-span-2">
             <div className="text-xs font-medium uppercase text-slate-500">
@@ -155,12 +193,36 @@ export default async function ReimbursementDetailPage({
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-sm font-semibold text-slate-900">附件</h2>
-        {attUrls.length === 0 ? (
-          <p className="mt-2 text-sm text-slate-500">无附件</p>
+        <h2 className="text-sm font-semibold text-slate-900">
+          发票 / 小票
+        </h2>
+        {invoiceUrls.length === 0 ? (
+          <p className="mt-2 text-sm text-slate-500">无</p>
         ) : (
           <ul className="mt-3 space-y-2">
-            {attUrls.map((a) => (
+            {invoiceUrls.map((a) => (
+              <li key={a.id}>
+                <a
+                  href={a.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-sm text-brand-accent hover:underline"
+                >
+                  {a.name || "查看附件"}
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-sm font-semibold text-slate-900">用途截图</h2>
+        {purposeUrls.length === 0 ? (
+          <p className="mt-2 text-sm text-slate-500">无</p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {purposeUrls.map((a) => (
               <li key={a.id}>
                 <a
                   href={a.url}

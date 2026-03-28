@@ -1,5 +1,9 @@
 export type UserRole = "employee" | "finance_admin" | "super_admin";
 
+export type CurrencyCode = "CNY" | "USD";
+
+export type AttachmentKind = "invoice" | "purpose";
+
 export type ReimbursementType =
   | "餐饮"
   | "打车"
@@ -30,11 +34,20 @@ export interface Reimbursement {
   title: string;
   expense_date: string;
   type: ReimbursementType;
+  /** 与 amount_cny 同步，兼容旧数据 */
   amount: number;
+  currency?: CurrencyCode;
+  original_amount?: number;
+  exchange_rate?: number;
+  amount_cny?: number;
+  exchange_rate_date?: string | null;
+  exchange_rate_source?: string | null;
   description: string | null;
   status: ReimbursementStatus;
   rejection_reason: string | null;
   submitted_at: string | null;
+  approved_at?: string | null;
+  paid_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -45,6 +58,7 @@ export interface ReimbursementAttachment {
   storage_path: string;
   file_name: string | null;
   content_type: string | null;
+  attachment_type?: AttachmentKind;
   created_at: string;
 }
 

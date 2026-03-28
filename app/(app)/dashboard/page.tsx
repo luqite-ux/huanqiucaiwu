@@ -7,6 +7,7 @@ import {
   isEmployeeRole,
 } from "@/types/database";
 import type { UserRole } from "@/types/database";
+import { ExportReimbursementsButton } from "@/components/ExportReimbursementsButton";
 
 function subDays(d: Date, n: number) {
   const x = new Date(d);
@@ -52,6 +53,15 @@ export default async function DashboardPage({
             </div>
             <div className="mt-3 text-sm text-brand-accent">进入 →</div>
           </Link>
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="text-sm font-medium text-slate-500">数据导出</div>
+            <div className="mt-2 text-sm text-slate-600">
+              导出全部报销记录（Excel），不参与审核流程。
+            </div>
+            <div className="mt-4">
+              <ExportReimbursementsButton label="导出全部 Excel" />
+            </div>
+          </div>
         </div>
       </div>
     );

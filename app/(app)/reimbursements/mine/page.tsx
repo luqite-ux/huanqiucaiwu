@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getSessionUser, getProfile, canSubmitReimbursement } from "@/lib/auth";
 import type { UserRole } from "@/types/database";
 import { StatusBadge } from "@/components/StatusBadge";
+import { AmountDisplayInline } from "@/components/AmountDisplay";
+import { ExportReimbursementsButton } from "@/components/ExportReimbursementsButton";
 import type { ReimbursementStatus } from "@/types/database";
 
 const STATUSES: { key: ReimbursementStatus | ""; label: string }[] = [
@@ -57,15 +59,21 @@ export default async function MineReimbursementsPage({
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">我的报销</h1>
           <p className="mt-1 text-sm text-slate-500">
-            草稿保存在草稿箱，提交后进入待审核流程。
+            列表金额以折算人民币为准；美元报销会显示汇率信息。
           </p>
         </div>
-        <Link
-          href="/reimbursements/new"
-          className="inline-flex justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800"
-        >
-          新建报销
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <ExportReimbursementsButton
+            statusFilter={status || undefined}
+            label="导出 Excel（当前筛选项）"
+          />
+          <Link
+            href="/reimbursements/new"
+            className="inline-flex justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800"
+          >
+            新建报销
+          </Link>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -99,7 +107,7 @@ export default async function MineReimbursementsPage({
               <th className="hidden px-4 py-3 font-medium sm:table-cell">
                 日期
               </th>
-              <th className="px-4 py-3 font-medium">金额</th>
+              <th className="px-4 py-3 font-medium">金额（折合 CN¥）</th>
               <th className="px-4 py-3 font-medium">状态</th>
               <th className="px-4 py-3 font-medium" />
             </tr>
@@ -114,8 +122,8 @@ export default async function MineReimbursementsPage({
                 <td className="hidden px-4 py-3 text-slate-600 sm:table-cell">
                   {r.expense_date}
                 </td>
-                <td className="px-4 py-3 tabular-nums text-slate-800">
-                  ¥{Number(r.amount).toFixed(2)}
+                <td className="px-4 py-3 text-slate-800">
+                  <AmountDisplayInline row={r} />
                 </td>
                 <td className="px-4 py-3">
                   <StatusBadge status={r.status as ReimbursementStatus} />

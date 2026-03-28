@@ -5,11 +5,69 @@ import {
   requireEmployee,
   requireAttachmentSignedUrlAccess,
 } from "@/lib/auth";
-import type { ReimbursementStatus, ReimbursementType } from "@/types/database";
+import type {
+  AttachmentKind,
+  CurrencyCode,
+  ReimbursementStatus,
+  ReimbursementType,
+} from "@/types/database";
 import { revalidatePath } from "next/cache";
 
 function formatAmount(n: number): string {
   return Number(n).toFixed(2);
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+function round6(n: number): number {
+  return Math.round(n * 1e6) / 1e6;
+}
+
+export type ReimbursementMoneyInput = {
+  currency: CurrencyCode;
+  original_amount: number;
+  exchange_rate: number;
+  amount_cny: number;
+  exchange_rate_date: string | null;
+  exchange_rate_source: string | null;
+};
+
+function buildMoneyRow(m: ReimbursementMoneyInput) {
+  const orig = round2(m.original_amount);
+  if (Number.isNaN(orig) || orig < 0) throw new Error("原始金额无效");
+
+  if (m.currency === "CNY") {
+    return {
+      currency: "CNY" as const,
+      original_amount: orig,
+      exchange_rate: 1,
+      amount_cny: orig,
+      exchange_rate_date: null,
+      exchange_rate_source: null,
+      amount: formatAmount(orig),
+    };
+  }
+
+  const rate = round6(m.exchange_rate);
+  if (!rate || rate <= 0 || Number.isNaN(rate)) {
+    throw new Error("美元报销须填写有效汇率");
+  }
+  const cny = round2(orig * rate);
+  if (Math.abs(cny - round2(m.amount_cny)) > 0.02) {
+    throw new Error("折算人民币与汇率不一致，请核对后重试");
+  }
+
+  return {
+    currency: "USD" as const,
+    original_amount: orig,
+    exchange_rate: rate,
+    amount_cny: cny,
+    exchange_rate_date: m.exchange_rate_date,
+    exchange_rate_source: m.exchange_rate_source,
+    amount: formatAmount(cny),
+  };
 }
 
 async function logAction(
@@ -29,15 +87,17 @@ async function logAction(
   });
 }
 
-export async function createReimbursementDraft(input: {
+export type ReimbursementDraftInput = {
   title: string;
   expense_date: string;
   type: ReimbursementType;
-  amount: number;
   description: string;
-}) {
+} & ReimbursementMoneyInput;
+
+export async function createReimbursementDraft(input: ReimbursementDraftInput) {
   const profile = await requireEmployee();
   const supabase = await createClient();
+  const money = buildMoneyRow(input);
 
   const { data, error } = await supabase
     .from("reimbursements")
@@ -46,10 +106,10 @@ export async function createReimbursementDraft(input: {
       title: input.title.trim(),
       expense_date: input.expense_date,
       type: input.type,
-      amount: formatAmount(input.amount),
       description: input.description.trim() || null,
       status: "draft",
       submitted_at: null,
+      ...money,
     })
     .select("id")
     .single();
@@ -63,16 +123,11 @@ export async function createReimbursementDraft(input: {
 
 export async function updateReimbursementDraft(
   id: string,
-  input: {
-    title: string;
-    expense_date: string;
-    type: ReimbursementType;
-    amount: number;
-    description: string;
-  }
+  input: ReimbursementDraftInput
 ) {
   await requireEmployee();
   const supabase = await createClient();
+  const money = buildMoneyRow(input);
 
   const { error } = await supabase
     .from("reimbursements")
@@ -80,8 +135,8 @@ export async function updateReimbursementDraft(
       title: input.title.trim(),
       expense_date: input.expense_date,
       type: input.type,
-      amount: formatAmount(input.amount),
       description: input.description.trim() || null,
+      ...money,
     })
     .eq("id", id);
 
@@ -115,13 +170,7 @@ export async function submitReimbursement(id: string) {
 
 export async function saveDraftOrSubmit(
   id: string | null,
-  input: {
-    title: string;
-    expense_date: string;
-    type: ReimbursementType;
-    amount: number;
-    description: string;
-  },
+  input: ReimbursementDraftInput,
   mode: "draft" | "submit"
 ) {
   if (!id) {
@@ -143,6 +192,7 @@ export async function registerAttachment(input: {
   storagePath: string;
   fileName: string;
   contentType: string | null;
+  attachmentType: AttachmentKind;
 }) {
   await requireEmployee();
   const supabase = await createClient();
@@ -152,6 +202,7 @@ export async function registerAttachment(input: {
     storage_path: input.storagePath,
     file_name: input.fileName,
     content_type: input.contentType,
+    attachment_type: input.attachmentType,
   });
 
   if (error) throw new Error(error.message);

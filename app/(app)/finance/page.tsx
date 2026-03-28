@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { StatusBadge } from "@/components/StatusBadge";
+import { AmountDisplayInline } from "@/components/AmountDisplay";
+import { ExportReimbursementsButton } from "@/components/ExportReimbursementsButton";
 import type { ReimbursementStatus } from "@/types/database";
 
 const FILTERS: { key: ReimbursementStatus | ""; label: string }[] = [
@@ -25,7 +27,13 @@ export default async function FinancePage({
   let q = supabase
     .from("reimbursements")
     .select(
-      "id, title, expense_date, type, amount, status, created_at, updated_at, user_id, profiles ( full_name, email )"
+      `
+      id, title, expense_date, type,
+      currency, original_amount, exchange_rate, amount_cny, amount,
+      exchange_rate_date, exchange_rate_source,
+      status, created_at, updated_at, user_id,
+      profiles ( full_name, email )
+    `
     )
     .order("updated_at", { ascending: false });
 
@@ -46,7 +54,12 @@ export default async function FinancePage({
     title: string;
     expense_date: string;
     type: string;
-    amount: string | number;
+    currency?: string | null;
+    original_amount?: string | number | null;
+    exchange_rate?: string | number | null;
+    amount_cny?: string | number | null;
+    amount?: string | number | null;
+    exchange_rate_date?: string | null;
     status: string;
     user_id: string;
     profiles:
@@ -57,11 +70,17 @@ export default async function FinancePage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-900">财务审核</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          查看全部报销申请，按状态筛选并进入详情处理。
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">财务审核</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            查看全部报销申请，按状态筛选；导出与当前筛选一致。
+          </p>
+        </div>
+        <ExportReimbursementsButton
+          statusFilter={status || undefined}
+          label="导出 Excel（当前筛选）"
+        />
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -97,7 +116,7 @@ export default async function FinancePage({
                 <th className="hidden px-4 py-3 font-medium sm:table-cell">
                   日期
                 </th>
-                <th className="px-4 py-3 font-medium">金额</th>
+                <th className="px-4 py-3 font-medium">金额（折合 CN¥）</th>
                 <th className="px-4 py-3 font-medium">状态</th>
                 <th className="px-4 py-3 font-medium" />
               </tr>
@@ -122,8 +141,8 @@ export default async function FinancePage({
                     <td className="hidden px-4 py-3 text-slate-600 sm:table-cell">
                       {r.expense_date}
                     </td>
-                    <td className="px-4 py-3 tabular-nums">
-                      ¥{Number(r.amount).toFixed(2)}
+                    <td className="px-4 py-3">
+                      <AmountDisplayInline row={r} />
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge status={r.status as ReimbursementStatus} />

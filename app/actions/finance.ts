@@ -37,9 +37,17 @@ export async function financeUpdateStatus(
   const patch: Record<string, unknown> = { status };
   if (status === "rejected") {
     patch.rejection_reason = rejectionReason?.trim() || "未说明原因";
+    patch.approved_at = null;
+    patch.paid_at = null;
   }
   if (status === "approved" || status === "paid") {
     patch.rejection_reason = null;
+  }
+  if (status === "approved") {
+    patch.approved_at = new Date().toISOString();
+  }
+  if (status === "paid") {
+    patch.paid_at = new Date().toISOString();
   }
 
   const { error } = await supabase
