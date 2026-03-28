@@ -18,13 +18,18 @@ export async function adminCreateUser(input: {
   email: string;
   password: string;
   role: UserRole;
+  fullName: string;
 }) {
   await requireSuperAdmin();
 
   const email = input.email.trim().toLowerCase();
   const password = input.password;
+  const fullName = input.fullName.trim();
   if (!email || !password) {
     return { error: "请填写邮箱和密码" as string };
+  }
+  if (!fullName) {
+    return { error: "请填写姓名" as string };
   }
   if (password.length < 6) {
     return { error: "密码至少 6 位" as string };
@@ -53,7 +58,7 @@ export async function adminCreateUser(input: {
       id: userId,
       email,
       role: input.role,
-      full_name: email.split("@")[0] ?? email,
+      full_name: fullName,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "id" }
@@ -65,26 +70,50 @@ export async function adminCreateUser(input: {
   }
 
   revalidatePath("/admin/users");
+  revalidatePath("/finance");
   return { ok: true as const };
 }
 
-export async function adminUpdateUserRole(input: {
+export async function adminUpdateUser(input: {
   userId: string;
   role: UserRole;
+  fullName: string;
 }) {
   const adminProfile = await requireSuperAdmin();
   assertRole(input.role);
 
-  if (input.userId === adminProfile.id) {
-    return { error: "不能在此修改自己的角色，请使用数据库或其他超级管理员账号" as string };
+  const name = input.fullName.trim();
+  if (!name) {
+    return { error: "姓名不能为空" as string };
   }
 
   const supabase = await createClient();
+  const now = new Date().toISOString();
+
+  if (input.userId === adminProfile.id) {
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        full_name: name,
+        updated_at: now,
+      })
+      .eq("id", input.userId);
+
+    if (error) {
+      return { error: error.message };
+    }
+    revalidatePath("/admin/users");
+    revalidatePath("/dashboard");
+    revalidatePath("/finance");
+    return { ok: true as const };
+  }
+
   const { error } = await supabase
     .from("profiles")
     .update({
+      full_name: name,
       role: input.role,
-      updated_at: new Date().toISOString(),
+      updated_at: now,
     })
     .eq("id", input.userId);
 
@@ -93,5 +122,7 @@ export async function adminUpdateUserRole(input: {
   }
 
   revalidatePath("/admin/users");
+  revalidatePath("/dashboard");
+  revalidatePath("/finance");
   return { ok: true as const };
 }
