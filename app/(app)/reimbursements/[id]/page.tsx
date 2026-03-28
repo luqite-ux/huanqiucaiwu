@@ -5,13 +5,20 @@ import {
   getProfile,
   getSessionUser,
   canAccessFinanceReview,
+  canAdjustReimbursementType,
+  canViewOthersReimbursementDetail,
 } from "@/lib/auth";
 import { StatusBadge } from "@/components/StatusBadge";
 import { FinanceActions } from "@/components/FinanceActions";
 import { getSignedAttachmentUrl } from "@/app/actions/reimbursements";
 import { AmountDisplayBlock } from "@/components/AmountDisplay";
 import type { ReimbursementStatus, UserRole } from "@/types/database";
-import { isEmployeeRole } from "@/types/database";
+import {
+  isEmployeeRole,
+  REIMBURSEMENT_TYPE_OPTIONS,
+  type ReimbursementType,
+} from "@/types/database";
+import { ReimbursementTypeStaffEditor } from "@/components/ReimbursementTypeStaffEditor";
 import type { ReimbursementAttachment } from "@/types/database";
 
 export default async function ReimbursementDetailPage({
@@ -28,6 +35,8 @@ export default async function ReimbursementDetailPage({
 
   const role = profile.role as UserRole;
   const finance = canAccessFinanceReview(role);
+  const staffDetail = canViewOthersReimbursementDetail(role);
+  const canEditType = canAdjustReimbursementType(role);
 
   const supabase = await createClient();
   const { data: row, error } = await supabase
@@ -39,7 +48,14 @@ export default async function ReimbursementDetailPage({
   if (error || !row) notFound();
 
   const isOwner = row.user_id === user.id;
-  if (!isOwner && !finance) notFound();
+  if (!isOwner && !staffDetail) notFound();
+
+  const rawType = String(row.type);
+  const initialType: ReimbursementType = REIMBURSEMENT_TYPE_OPTIONS.includes(
+    rawType as ReimbursementType
+  )
+    ? (rawType as ReimbursementType)
+    : "其他";
 
   const { data: submitter } = await supabase
     .from("profiles")
@@ -132,7 +148,19 @@ export default async function ReimbursementDetailPage({
           <div className="text-xs font-medium uppercase text-slate-500">
             类型
           </div>
-          <div className="mt-1 text-slate-900">{row.type}</div>
+          {canEditType ? (
+            <>
+              <p className="mt-1 text-xs text-slate-500">
+                可在此更正分类（员工填报有误时由财务或系统管理员修改）
+              </p>
+              <ReimbursementTypeStaffEditor
+                reimbursementId={id}
+                initialType={initialType}
+              />
+            </>
+          ) : (
+            <div className="mt-1 text-slate-900">{row.type}</div>
+          )}
         </div>
         <div className="sm:col-span-2">
           <div className="text-xs font-medium uppercase text-slate-500">

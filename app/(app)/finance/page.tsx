@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getProfile, getSessionUser } from "@/lib/auth";
 import { StatusBadge } from "@/components/StatusBadge";
 import { AmountDisplayInline } from "@/components/AmountDisplay";
 import { ExportReimbursementsButton } from "@/components/ExportReimbursementsButton";
@@ -19,9 +21,15 @@ export default async function FinancePage({
 }: {
   searchParams: Promise<{ status?: string }>;
 }) {
+  const user = await getSessionUser();
+  const profile = await getProfile();
+  if (!user || !profile) redirect("/login");
+
   const { status: raw } = await searchParams;
   const status =
     FILTERS.find((f) => f.key === raw)?.key ?? ("" as const);
+
+  const isSuperAdmin = profile.role === "super_admin";
 
   const supabase = await createClient();
   let q = supabase
@@ -72,9 +80,13 @@ export default async function FinancePage({
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">财务审核</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">
+            {isSuperAdmin ? "报销列表" : "财务审核"}
+          </h1>
           <p className="mt-1 text-sm text-slate-500">
-            查看全部报销申请，按状态筛选；导出与当前筛选一致。
+            {isSuperAdmin
+              ? "可浏览全部报销、导出数据，并在详情中修正「类型」。通过、驳回、打款请使用财务账号操作。"
+              : "查看全部报销申请，按状态筛选；导出与当前筛选一致。"}
           </p>
         </div>
         <ExportReimbursementsButton

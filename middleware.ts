@@ -82,7 +82,7 @@ export async function middleware(request: NextRequest) {
     }
 
     if (pathname.startsWith("/finance")) {
-      if (role !== "finance_admin") return deny();
+      if (role !== "finance_admin" && role !== "super_admin") return deny();
     }
 
     if (

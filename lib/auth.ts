@@ -38,6 +38,16 @@ export function canAccessFinanceReview(role: UserRole): boolean {
   return role === "finance_admin";
 }
 
+/** 财务或超管可打开他人报销详情（列表见 /finance；超管仅调整类型等，不参与审核按钮） */
+export function canViewOthersReimbursementDetail(role: UserRole): boolean {
+  return role === "finance_admin" || role === "super_admin";
+}
+
+/** 财务或超管可修改报销「类型」 */
+export function canAdjustReimbursementType(role: UserRole): boolean {
+  return role === "finance_admin" || role === "super_admin";
+}
+
 /** 可进入 /admin/users 管理用户 */
 export function canAccessAdminUsers(role: UserRole): boolean {
   return role === "super_admin";
@@ -74,7 +84,9 @@ export async function requireSuperAdmin(): Promise<Profile> {
 
 /** 可为报销附件生成签名 URL */
 export function canRequestAttachmentSignedUrl(role: UserRole): boolean {
-  return role === "employee" || role === "finance_admin";
+  return (
+    role === "employee" || role === "finance_admin" || role === "super_admin"
+  );
 }
 
 export async function requireAttachmentSignedUrlAccess(): Promise<Profile> {

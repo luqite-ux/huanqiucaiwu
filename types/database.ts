@@ -5,11 +5,18 @@ export type CurrencyCode = "CNY" | "USD";
 export type AttachmentKind = "invoice" | "purpose";
 
 export type ReimbursementType =
+  | "软件"
   | "餐饮"
   | "打车"
   | "差旅"
   | "采购"
   | "办公"
+  | "通讯网络"
+  | "快递物流"
+  | "会务培训"
+  | "团队建设"
+  | "物业水电"
+  | "业务招待"
   | "其他";
 
 export type ReimbursementStatus =
@@ -72,11 +79,18 @@ export interface ReimbursementLog {
 }
 
 export const REIMBURSEMENT_TYPE_OPTIONS: ReimbursementType[] = [
+  "软件",
   "餐饮",
   "打车",
   "差旅",
   "采购",
   "办公",
+  "通讯网络",
+  "快递物流",
+  "会务培训",
+  "团队建设",
+  "物业水电",
+  "业务招待",
   "其他",
 ];
 

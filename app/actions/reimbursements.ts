@@ -4,13 +4,16 @@ import { createClient } from "@/lib/supabase/server";
 import {
   requireEmployee,
   requireAttachmentSignedUrlAccess,
+  requireProfile,
 } from "@/lib/auth";
 import type {
   AttachmentKind,
   CurrencyCode,
   ReimbursementStatus,
   ReimbursementType,
+  UserRole,
 } from "@/types/database";
+import { REIMBURSEMENT_TYPE_OPTIONS } from "@/types/database";
 import { revalidatePath } from "next/cache";
 
 function formatAmount(n: number): string {
@@ -85,6 +88,34 @@ async function logAction(
     action,
     detail: detail ?? null,
   });
+}
+
+const ALLOWED_REIMBURSEMENT_TYPES = new Set<string>(REIMBURSEMENT_TYPE_OPTIONS);
+
+export async function updateReimbursementTypeByStaff(
+  reimbursementId: string,
+  type: ReimbursementType
+) {
+  const profile = await requireProfile();
+  const role = profile.role as UserRole;
+  if (role !== "finance_admin" && role !== "super_admin") {
+    throw new Error("仅财务或系统管理员可修改报销类型");
+  }
+  if (!ALLOWED_REIMBURSEMENT_TYPES.has(type)) {
+    throw new Error("无效的类型");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("reimbursements")
+    .update({ type })
+    .eq("id", reimbursementId);
+
+  if (error) throw new Error(error.message);
+  await logAction(supabase, reimbursementId, "调整报销类型", { type });
+  revalidatePath(`/reimbursements/${reimbursementId}`);
+  revalidatePath("/finance");
+  revalidatePath("/dashboard");
 }
 
 export type ReimbursementDraftInput = {

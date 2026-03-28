@@ -42,7 +42,7 @@ export default async function DashboardPage({
             您以超级管理员身份登录，负责用户与角色配置，不参与报销提交与财务审核。
           </p>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Link
             href="/admin/users"
             className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-slate-300"
@@ -50,6 +50,18 @@ export default async function DashboardPage({
             <div className="text-sm font-medium text-slate-500">用户管理</div>
             <div className="mt-2 text-lg font-medium text-slate-800">
               创建账号、分配角色
+            </div>
+            <div className="mt-3 text-sm text-brand-accent">进入 →</div>
+          </Link>
+          <Link
+            href="/finance"
+            className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-slate-300"
+          >
+            <div className="text-sm font-medium text-slate-500">
+              报销总览
+            </div>
+            <div className="mt-2 text-lg font-medium text-slate-800">
+              按状态浏览、修正类型
             </div>
             <div className="mt-3 text-sm text-brand-accent">进入 →</div>
           </Link>
