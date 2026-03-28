@@ -22,6 +22,20 @@ function round2(n: number) {
   return Math.round(n * 100) / 100;
 }
 
+/** Supabase Storage object name must be ASCII-safe; 原始文件名写入 DB 的 file_name。 */
+function asciiStorageObjectName(originalName: string): string {
+  const lastDot = originalName.lastIndexOf(".");
+  const rawExt =
+    lastDot >= 0 ? originalName.slice(lastDot + 1).toLowerCase() : "";
+  const ext = rawExt.replace(/[^a-z0-9]/g, "").slice(0, 8);
+  const id =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID().replace(/-/g, "").slice(0, 16)
+      : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+  const base = `${Date.now()}_${id}`;
+  return ext ? `${base}.${ext}` : base;
+}
+
 type InitialReimbursement = {
   id: string;
   title: string;
@@ -171,8 +185,7 @@ export function ReimbursementForm(props: {
     if (!files?.length) return;
     const supabase = createClient();
     for (const file of Array.from(files)) {
-      const safeName = file.name.replace(/[^\w.\-()\u4e00-\u9fa5]/g, "_");
-      const path = `${props.userId}/${reimbursementId}/${Date.now()}_${safeName}`;
+      const path = `${props.userId}/${reimbursementId}/${asciiStorageObjectName(file.name)}`;
       const { error: upErr } = await supabase.storage
         .from("reimbursement-files")
         .upload(path, file, { upsert: false, contentType: file.type });
