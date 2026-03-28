@@ -131,7 +131,11 @@ export default async function NewReimbursementPage({
     .single();
 
   if (error || !row) notFound();
-  if (row.status !== "draft" && row.status !== "rejected") {
+  if (
+    row.status !== "draft" &&
+    row.status !== "rejected" &&
+    row.status !== "pending"
+  ) {
     redirect(`/reimbursements/${editId}`);
   }
 
@@ -148,10 +152,18 @@ export default async function NewReimbursementPage({
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">
-            {row.status === "rejected" ? "修改并重新提交" : "编辑报销草稿"}
+            {row.status === "rejected"
+              ? "修改并重新提交"
+              : row.status === "pending"
+                ? "待审核：修改后重新提交"
+                : "编辑报销草稿"}
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            驳回原因可在详情页查看。提交前请核对金额与附件。
+            {row.status === "rejected"
+              ? "驳回原因可在详情页查看。提交前请核对金额与附件。"
+              : row.status === "pending"
+                ? "财务尚未审核前可修改内容；保存后继续提交将更新提交时间。"
+                : "可先保存草稿，确认无误后再提交审核。"}
           </p>
         </div>
         <Link
@@ -167,6 +179,7 @@ export default async function NewReimbursementPage({
           initialId={editId}
           initial={initial}
           initialAttachments={toClientAttachments(attRows ?? [])}
+          editingStatus={row.status as "draft" | "pending" | "rejected"}
         />
       </div>
     </div>

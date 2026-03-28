@@ -14,6 +14,7 @@ import {
   REIMBURSEMENT_TYPE_OPTIONS,
   type AttachmentKind,
   type CurrencyCode,
+  type ReimbursementStatus,
   type ReimbursementType,
 } from "@/types/database";
 import type { ReimbursementAttachment } from "@/types/database";
@@ -55,6 +56,8 @@ export function ReimbursementForm(props: {
   initialId: string | null;
   initial: InitialReimbursement | null;
   initialAttachments: ReimbursementAttachment[];
+  /** 编辑已有单时的状态，用于按钮文案（新建草稿不传） */
+  editingStatus?: ReimbursementStatus;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -531,7 +534,7 @@ export function ReimbursementForm(props: {
           }
           className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-60"
         >
-          保存草稿
+          {props.editingStatus === "pending" ? "保存修改" : "保存草稿"}
         </button>
         <button
           type="button"
@@ -545,7 +548,7 @@ export function ReimbursementForm(props: {
           }
           className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white shadow hover:bg-slate-800 disabled:opacity-60"
         >
-          提交审核
+          {props.editingStatus === "pending" ? "重新提交审核" : "提交审核"}
         </button>
       </div>
     </div>

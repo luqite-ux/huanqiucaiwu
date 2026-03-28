@@ -5,6 +5,7 @@ import {
   requireEmployee,
   requireAttachmentSignedUrlAccess,
   requireProfile,
+  requireSuperAdmin,
 } from "@/lib/auth";
 import type {
   AttachmentKind,
@@ -174,6 +175,12 @@ export async function updateReimbursementDraft(
   const supabase = await createClient();
   const money = buildMoneyRow(input);
 
+  const { data: before } = await supabase
+    .from("reimbursements")
+    .select("status")
+    .eq("id", id)
+    .single();
+
   const { error } = await supabase
     .from("reimbursements")
     .update({
@@ -186,7 +193,9 @@ export async function updateReimbursementDraft(
     .eq("id", id);
 
   if (error) throw new Error(humanizeReimbursementDbError(error.message));
-  await logAction(supabase, id, "更新草稿", { title: input.title });
+  const logLabel =
+    before?.status === "pending" ? "更新待审核报销" : "更新草稿";
+  await logAction(supabase, id, logLabel, { title: input.title });
   revalidatePath(`/reimbursements/${id}`);
   revalidatePath("/reimbursements/mine");
 }
@@ -194,6 +203,12 @@ export async function updateReimbursementDraft(
 export async function submitReimbursement(id: string) {
   await requireEmployee();
   const supabase = await createClient();
+
+  const { data: before } = await supabase
+    .from("reimbursements")
+    .select("status")
+    .eq("id", id)
+    .single();
 
   const { error } = await supabase
     .from("reimbursements")
@@ -205,7 +220,9 @@ export async function submitReimbursement(id: string) {
     .eq("id", id);
 
   if (error) throw new Error(error.message);
-  await logAction(supabase, id, "提交审核");
+  const logLabel =
+    before?.status === "pending" ? "重新提交审核" : "提交审核";
+  await logAction(supabase, id, logLabel);
   revalidatePath("/dashboard");
   revalidatePath(`/reimbursements/${id}`);
   revalidatePath("/reimbursements/mine");
@@ -290,6 +307,31 @@ export async function deleteDraft(id: string) {
 
   revalidatePath("/dashboard");
   revalidatePath("/reimbursements/mine");
+}
+
+export async function deleteReimbursementBySuperAdmin(id: string) {
+  await requireSuperAdmin();
+  const supabase = await createClient();
+
+  const { data: attachments } = await supabase
+    .from("reimbursement_attachments")
+    .select("storage_path")
+    .eq("reimbursement_id", id);
+
+  const paths = (attachments ?? []).map((a) => a.storage_path).filter(Boolean);
+  if (paths.length) {
+    const { error: rmErr } = await supabase.storage
+      .from("reimbursement-files")
+      .remove(paths);
+    if (rmErr) throw new Error(rmErr.message);
+  }
+
+  const { error } = await supabase.from("reimbursements").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/reimbursements/mine");
+  revalidatePath("/finance");
 }
 
 export async function getSignedAttachmentUrl(storagePath: string) {

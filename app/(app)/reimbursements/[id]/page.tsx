@@ -15,10 +15,12 @@ import { AmountDisplayBlock } from "@/components/AmountDisplay";
 import type { ReimbursementStatus, UserRole } from "@/types/database";
 import {
   isEmployeeRole,
+  isSuperAdminRole,
   REIMBURSEMENT_TYPE_OPTIONS,
   type ReimbursementType,
 } from "@/types/database";
 import { ReimbursementTypeStaffEditor } from "@/components/ReimbursementTypeStaffEditor";
+import { SuperAdminDeleteReimbursement } from "@/components/SuperAdminDeleteReimbursement";
 import type { ReimbursementAttachment } from "@/types/database";
 
 export default async function ReimbursementDetailPage({
@@ -103,7 +105,7 @@ export default async function ReimbursementDetailPage({
   const canEdit =
     isOwner &&
     isEmployeeRole(role) &&
-    (status === "draft" || status === "rejected");
+    (status === "draft" || status === "rejected" || status === "pending");
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -125,7 +127,11 @@ export default async function ReimbursementDetailPage({
               href={`/reimbursements/new?id=${id}`}
               className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
             >
-              {status === "rejected" ? "重新编辑" : "继续编辑"}
+              {status === "rejected"
+                ? "重新编辑"
+                : status === "pending"
+                  ? "修改并重新提交"
+                  : "继续编辑"}
             </Link>
           ) : null}
           <Link
@@ -271,6 +277,15 @@ export default async function ReimbursementDetailPage({
           <h2 className="text-sm font-semibold text-slate-900">财务操作</h2>
           <div className="mt-4">
             <FinanceActions reimbursementId={id} currentStatus={status} />
+          </div>
+        </div>
+      ) : null}
+
+      {isSuperAdminRole(role) ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-sm font-semibold text-slate-900">系统管理</h2>
+          <div className="mt-4">
+            <SuperAdminDeleteReimbursement reimbursementId={id} />
           </div>
         </div>
       ) : null}
