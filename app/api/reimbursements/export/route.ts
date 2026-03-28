@@ -4,6 +4,13 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile, getSessionUser } from "@/lib/auth";
 import type { UserRole } from "@/types/database";
 
+/** 控制体积与 Serverless 耗时：单张展示尺寸、每单张数、全局张数上限 */
+const IMAGE_EXT_WIDTH = 160;
+const IMAGE_EXT_HEIGHT = 120;
+const MAX_INVOICE_IMAGES = 2;
+const MAX_PURPOSE_IMAGES = 2;
+const MAX_TOTAL_EMBEDDED_IMAGES = 120;
+
 function formatDt(v: string | null | undefined): string {
   if (!v) return "";
   try {
@@ -18,6 +25,36 @@ function todayFileSlug() {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
+
+function imageExtensionFromAttachment(
+  contentType: string | null,
+  fileName: string | null
+): "png" | "jpeg" | "gif" | null {
+  const ct = (contentType ?? "").toLowerCase();
+  if (ct.includes("png")) return "png";
+  if (ct.includes("jpeg") || ct.includes("jpg")) return "jpeg";
+  if (ct.includes("gif")) return "gif";
+  const fn = (fileName ?? "").toLowerCase();
+  if (fn.endsWith(".png")) return "png";
+  if (fn.endsWith(".jpg") || fn.endsWith(".jpeg")) return "jpeg";
+  if (fn.endsWith(".gif")) return "gif";
+  return null;
+}
+
+function isPdf(contentType: string | null, fileName: string | null): boolean {
+  const ct = (contentType ?? "").toLowerCase();
+  if (ct.includes("pdf")) return true;
+  return (fileName ?? "").toLowerCase().endsWith(".pdf");
+}
+
+type Att = {
+  reimbursement_id: string;
+  storage_path: string;
+  file_name: string | null;
+  content_type: string | null;
+  attachment_type: string | null;
+  created_at: string;
+};
 
 export async function GET(request: Request) {
   const user = await getSessionUser();
@@ -95,6 +132,27 @@ export async function GET(request: Request) {
       | Array<{ email: string | null; full_name: string | null }>;
   };
 
+  const list = (rows as Row[] | null) ?? [];
+  const ids = list.map((r) => r.id);
+
+  const byReimb = new Map<string, Att[]>();
+  if (ids.length > 0) {
+    const { data: atts, error: attErr } = await supabase
+      .from("reimbursement_attachments")
+      .select("*")
+      .in("reimbursement_id", ids)
+      .order("created_at", { ascending: true });
+
+    if (!attErr && atts) {
+      for (const a of atts as Att[]) {
+        const arr = byReimb.get(a.reimbursement_id) ?? [];
+        arr.push(a);
+        byReimb.set(a.reimbursement_id, arr);
+      }
+    }
+  }
+
+  const TEXT_COL_COUNT = 16;
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("报销记录");
 
@@ -115,16 +173,40 @@ export async function GET(request: Request) {
     { header: "审核通过时间", key: "approved_at", width: 20 },
     { header: "打款时间", key: "paid_at", width: 20 },
     { header: "创建时间", key: "created_at", width: 20 },
+    { header: "发票图1", key: "x1", width: 22 },
+    { header: "发票图2", key: "x2", width: 22 },
+    { header: "用途图1", key: "x3", width: 22 },
+    { header: "用途图2", key: "x4", width: 22 },
+    { header: "其他附件说明", key: "extra_note", width: 28 },
   ];
 
-  for (const r of (rows as Row[] | null) ?? []) {
+  let embeddedCount = 0;
+
+  for (const r of list) {
     const p = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles;
     const email = p?.email ?? "";
     const cny = Number(r.amount_cny ?? r.amount ?? 0);
     const orig = Number(r.original_amount ?? cny);
     const rate = Number(r.exchange_rate ?? 1);
 
-    ws.addRow({
+    const all = byReimb.get(r.id) ?? [];
+    const invoices = all.filter(
+      (a) => (a.attachment_type ?? "invoice") === "invoice"
+    );
+    const purposes = all.filter((a) => a.attachment_type === "purpose");
+
+    const pdfNotes: string[] = [];
+    for (const a of all) {
+      if (isPdf(a.content_type, a.file_name)) {
+        pdfNotes.push(a.file_name || "PDF");
+      }
+    }
+    const extraNote =
+      pdfNotes.length > 0
+        ? `非图片附件（请在系统中查看）：${pdfNotes.join("；")}`
+        : "";
+
+    const excelRow = ws.addRow({
       title: r.title,
       expense_date: r.expense_date,
       type: r.type,
@@ -141,6 +223,91 @@ export async function GET(request: Request) {
       approved_at: formatDt(r.approved_at),
       paid_at: formatDt(r.paid_at),
       created_at: formatDt(r.created_at),
+      x1: "",
+      x2: "",
+      x3: "",
+      x4: "",
+      extra_note: extraNote,
+    });
+
+    const rowNumber = excelRow.number;
+    let hasImage = false;
+
+    const slots: {
+      att: Att | undefined;
+      colIndex: number;
+    }[] = [
+      { att: invoices[0], colIndex: TEXT_COL_COUNT + 0 },
+      { att: invoices[1], colIndex: TEXT_COL_COUNT + 1 },
+      { att: purposes[0], colIndex: TEXT_COL_COUNT + 2 },
+      { att: purposes[1], colIndex: TEXT_COL_COUNT + 3 },
+    ];
+
+    for (const { att, colIndex } of slots) {
+      if (!att || embeddedCount >= MAX_TOTAL_EMBEDDED_IMAGES) break;
+      if (isPdf(att.content_type, att.file_name)) continue;
+
+      const ext = imageExtensionFromAttachment(
+        att.content_type,
+        att.file_name
+      );
+      if (!ext) continue;
+
+      const { data: blob, error: dlErr } = await supabase.storage
+        .from("reimbursement-files")
+        .download(att.storage_path);
+
+      if (dlErr || !blob) continue;
+
+      const ab = await blob.arrayBuffer();
+      const bytes = new Uint8Array(ab);
+      if (bytes.length === 0) continue;
+
+      try {
+        const imageId = wb.addImage({
+          base64: Buffer.from(bytes).toString("base64"),
+          extension: ext,
+        });
+
+        ws.addImage(imageId, {
+          tl: { col: colIndex, row: rowNumber - 1 },
+          ext: { width: IMAGE_EXT_WIDTH, height: IMAGE_EXT_HEIGHT },
+        });
+        embeddedCount += 1;
+        hasImage = true;
+      } catch {
+        /* 损坏或非常规格式则跳过 */
+      }
+    }
+
+    if (hasImage) {
+      excelRow.height = Math.max(
+        excelRow.height ?? 0,
+        IMAGE_EXT_HEIGHT * 0.8
+      );
+    }
+
+    if (invoices.length > MAX_INVOICE_IMAGES || purposes.length > MAX_PURPOSE_IMAGES) {
+      const tail: string[] = [];
+      if (invoices.length > MAX_INVOICE_IMAGES) {
+        tail.push(
+          `另有发票类附件 ${invoices.length - MAX_INVOICE_IMAGES} 个未嵌入`
+        );
+      }
+      if (purposes.length > MAX_PURPOSE_IMAGES) {
+        tail.push(
+          `另有用途截图 ${purposes.length - MAX_PURPOSE_IMAGES} 张未嵌入`
+        );
+      }
+      const cell = excelRow.getCell("extra_note");
+      const prev = String(cell.value ?? "");
+      cell.value = [prev, tail.join("；")].filter(Boolean).join(" ");
+    }
+  }
+
+  if (embeddedCount >= MAX_TOTAL_EMBEDDED_IMAGES) {
+    ws.addRow({
+      title: `【说明】嵌入图片已达上限 ${MAX_TOTAL_EMBEDDED_IMAGES} 张，其余请在系统中查看附件。`,
     });
   }
 
